@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#218d8d">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Sudoku">
+
+    <!-- PWA Service Worker -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(err => {
+          console.log('ServiceWorker registration failed: ', err);
+        });
+      }
+    </script>
+    <title>Sudoku Puzzle Game</title>
+    <style>
+        :root {
+            --color-white: rgba(255, 255, 255, 1);
+            --color-black: rgba(0, 0, 0, 1);
+            --color-cream-50: rgba(252, 252, 249, 1);
+            --color-cream-100: rgba(255, 255, 253, 1);
+            --color-gray-200: rgba(245, 245, 245, 1);
+            --color-gray-300: rgba(167, 169, 169, 1);
+            --color-gray-400: rgba(119, 124, 124, 1);
+            --color-slate-500: rgba(98, 108, 113, 1);
+            --color-slate-900: rgba(19, 52, 59, 1);
+            --color-teal-500: rgba(33, 128, 141, 1);
+            --color-teal-600: rgba(29, 116, 128, 1);
+            --color-teal-700: rgba(26, 104, 115, 1);
+            --color-red-500: rgba(192, 21, 47, 1);
+
+            --color-background: var(--color-cream-50);
+            --color-surface: var(--color-cream-100);
+            --color-text: var(--color-slate-900);
+            --color-primary: var(--color-teal-500);
+            --color-primary-hover: var(--color-teal-600);
+            --color-error: var(--color-red-500);
+            --color-border: rgba(94, 82, 64, 0.2);
+            --color-focus-ring: rgba(33, 128, 141, 0.4);
+
+            --font-family-base: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            --space-4: 4px;
+            --space-8: 8px;
+            --space-12: 12px;
+            --space-16: 16px;
+            --space-20: 20px;
+            --space-24: 24px;
+            --space-32: 32px;
+            --radius-base: 8px;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            font-family: var(--font-family-base);
+            background-color: var(--color-background);
+            color: var(--color-text);
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: var(--space-16);
+        }
+
+        .container {
+            background: var(--color-surface);
+            border-radius: var(--radius-base);
+            padding: var(--space-24);
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            max-width: 480px;
+            width: 100%;
+            margin: 0 auto;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 0 0 var(--space-20) 0;
+            font-size: 24px;
+            color: var(--color-text);
+        }
+
+        .controls {
+            display: flex;
+            gap: var(--space-12);
+            margin-bottom: var(--space-16);
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .difficulty-buttons {
+            display: flex;
+            gap: var(--space-8);
+            flex: 1;
+            justify-content: center;
+            min-width: 260px;
+        }
+
+        .btn {
+            padding: var(--space-8) var(--space-16);
+            border: 2px solid var(--color-primary);
+            background: var(--color-white);
+            color: var(--color-primary);
+            border-radius: var(--radius-base);
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: all 150ms ease;
+            white-space: nowrap;
+        }
+
+        .btn:hover {
+            background: var(--color-primary);
+            color: var(--color-white);
+        }
+
+        .btn.active {
+            background: var(--color-primary);
+            color: var(--color-white);
+        }
+
+        .btn--secondary {
+            flex: 0 1 auto;
+            padding: var(--space-8) var(--space-12);
+            border-color: var(--color-border);
+            color: var(--color-text);
+            font-size: 12px;
+        }
+
+        .btn--secondary:hover {
+            background: var(--color-gray-200);
+            color: var(--color-text);
+        }
+
+        .info-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-12);
+            padding: var(--space-8) var(--space-12);
+            background: var(--color-gray-200);
+            border-radius: var(--radius-base);
+            font-size: 13px;
+        }
+
+        .timer {
+            font-weight: 600;
+            color: var(--color-primary);
+        }
+
+        .sudoku-grid {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 0;
+            margin: 0 auto var(--space-16) auto;
+            border: 2px solid var(--color-text);
+            background: var(--color-white);
+            max-width: 340px;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+        }
+
+        .sudoku-cell {
+            width: 100%;
+            height: 100%;
+            border: 1px solid var(--color-gray-300);
+            font-size: clamp(14px, 2.2vw, 18px);
+            font-weight: 600;
+            text-align: center;
+            cursor: pointer;
+            background: var(--color-white);
+            transition: all 150ms ease;
+            padding: 0;
+            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .sudoku-cell:focus {
+            outline: none;
+            background: rgba(33, 128, 141, 0.1);
+            box-shadow: inset 0 0 0 2px var(--color-primary);
+        }
+
+        .sudoku-cell.given {
+            background: var(--color-gray-200);
+            cursor: default;
+            font-weight: 700;
+        }
+
+        .sudoku-cell.given:focus {
+            background: var(--color-gray-200);
+            box-shadow: none;
+        }
+
+        .sudoku-cell.selected {
+            background: rgba(33, 128, 141, 0.15);
+        }
+
+        .sudoku-cell.error {
+            background: rgba(192, 21, 47, 0.12);
+        }
+
+        .sudoku-cell.highlight-row,
+        .sudoku-cell.highlight-col,
+        .sudoku-cell.highlight-box {
+            background: rgba(33, 128, 141, 0.08);
+        }
+
+        .sudoku-cell {
+            border-right: 1px solid var(--color-gray-300);
+            border-bottom: 1px solid var(--color-gray-300);
+        }
+
+        .sudoku-cell:nth-child(9n) {
+            border-right: none;
+        }
+
+        .sudoku-cell:nth-child(n+73) {
+            border-bottom: none;
+        }
+
+        .sudoku-cell:nth-child(3n) {
+            border-right: 2px solid var(--color-text);
+        }
+
+        .sudoku-cell:nth-child(9n) {
+            border-right: none;
+        }
+
+        .sudoku-cell:nth-child(n+19):nth-child(-n+27),
+        .sudoku-cell:nth-child(n+46):nth-child(-n+54),
+        .sudoku-cell:nth-child(n+73):nth-child(-n+81) {
+            border-bottom: 2px solid var(--color-text);
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: var(--space-12);
+            justify-content: center;
+            margin-top: var(--space-8);
+        }
+
+        .btn--primary {
+            background: var(--color-primary);
+            color: var(--color-white);
+            border-color: var(--color-primary);
+            flex: 1;
+            max-width: 140px;
+            font-size: 13px;
+        }
+
+        .btn--primary:hover {
+            background: var(--color-primary-hover);
+            border-color: var(--color-primary-hover);
+        }
+
+        .status-message {
+            text-align: center;
+            margin-top: var(--space-12);
+            font-weight: 600;
+            min-height: 20px;
+            font-size: 13px;
+        }
+
+        .status-message.success {
+            color: var(--color-primary);
+        }
+
+        .status-message.error {
+            color: var(--color-error);
+        }
+
+        .analytics-section {
+            display: flex;
+            gap: var(--space-12);
+            margin-top: var(--space-20);
+            justify-content: center;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .modal.show {
+            display: flex;
+        }
+
+        .modal-content {
+            background: var(--color-surface);
+            border-radius: var(--radius-base);
+            padding: var(--space-24);
+            max-width: 700px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: var(--space-20);
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: var(--space-16);
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 28px;
+            cursor: pointer;
+            color: var(--color-text);
+            padding: 0;
+            line-height: 1;
+        }
+
+        .modal-body {
+            margin-bottom: var(--space-20);
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: var(--space-16);
+            margin-bottom: var(--space-24);
+        }
+
+        .stat-card {
+            background: var(--color-gray-200);
+            border-radius: var(--radius-base);
+            padding: var(--space-16);
+            text-align: center;
+            border: 1px solid var(--color-border);
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: var(--color-slate-500);
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: var(--space-8);
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--color-primary);
+        }
+
+        .modal-actions {
+            display: flex;
+            gap: var(--space-12);
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: var(--space-16);
+                max-width: 100%;
+            }
+
+            h1 {
+                font-size: 22px;
+            }
+
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+
+            .difficulty-buttons {
+                width: 100%;
+                min-width: auto;
+            }
+
+            .sudoku-grid {
+                max-width: 95vw;
+                border-width: 2px;
+            }
+
+            .sudoku-cell {
+                font-size: 16px;
+            }
+
+            .info-bar {
+                flex-direction: column;
+                gap: 4px;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Sudoku</h1>
+
+        <div class="controls">
+            <div class="difficulty-buttons">
+                <button class="btn active" data-difficulty="easy">Easy</button>
+                <button class="btn" data-difficulty="medium">Medium</button>
+                <button class="btn" data-difficulty="hard">Hard</button>
+            </div>
+            <button class="btn btn--secondary" id="newGameBtn">New Game</button>
+        </div>
+
+        <div class="info-bar">
+            <span>Difficulty: <strong id="difficultyDisplay">Easy</strong></span>
+            <span class="timer">Time: <strong id="timer">00:00</strong></span>
+        </div>
+
+        <div class="sudoku-grid" id="sudokuGrid"></div>
+
+        <div class="action-buttons">
+            <button class="btn btn--primary" id="hintBtn">Get Hint</button>
+            <button class="btn btn--primary" id="checkBtn">Check</button>
+            <button class="btn btn--primary" id="solveBtn">Solve</button>
+        </div>
+
+        <div class="status-message" id="statusMessage"></div>
+
+        <div class="analytics-section">
+            <button class="btn btn--secondary" id="statsBtn">📊 Stats</button>
+            <button class="btn btn--secondary" id="exportBtn">⬇️ Export</button>
+        </div>
+
+        <!-- Analytics Modal -->
+        <div class="modal" id="analyticsModal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Game Statistics</h2>
+                    <button class="modal-close" id="closeModalBtn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-label">Total Games</div>
+                            <div class="stat-value" id="statTotalGames">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Completed</div>
+                            <div class="stat-value" id="statCompleted">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Completion Rate</div>
+                            <div class="stat-value" id="statRate">0%</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Total Hints Used</div>
+                            <div class="stat-value" id="statHints">0</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Best - Easy</div>
+                            <div class="stat-value" id="statBestEasy">--</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Best - Medium</div>
+                            <div class="stat-value" id="statBestMedium">--</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Best - Hard</div>
+                            <div class="stat-value" id="statBestHard">--</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Avg Time - Easy</div>
+                            <div class="stat-value" id="statAvgEasy">--</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Avg Time - Medium</div>
+                            <div class="stat-value" id="statAvgMedium">--</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-label">Avg Time - Hard</div>
+                            <div class="stat-value" id="statAvgHard">--</div>
+                        </div>
+                    </div>
+                    <div class="modal-actions">
+                        <button class="btn btn--secondary" id="resetStatsBtn">Reset Stats</button>
+                        <button class="btn btn--secondary" id="downloadStatsBtn">Download as JSON</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SEED_PUZZLES = {
+            easy: [
+                [[5, 3, 0, 0, 7, 0, 0, 0, 0],[6, 0, 0, 1, 9, 5, 0, 0, 0],[0, 9, 8, 0, 0, 0, 0, 6, 0],[8, 0, 0, 0, 6, 0, 0, 0, 3],[4, 0, 0, 8, 0, 3, 0, 0, 1],[7, 0, 0, 0, 2, 0, 0, 0, 6],[0, 6, 0, 0, 0, 0, 2, 8, 0],[0, 0, 0, 4, 1, 9, 0, 0, 5],[0, 0, 0, 0, 8, 0, 0, 7, 9]],
+                [[3, 0, 0, 0, 0, 5, 0, 0, 0],[0, 7, 0, 0, 6, 0, 0, 8, 0],[0, 0, 2, 0, 0, 0, 9, 0, 0],[0, 0, 0, 8, 0, 0, 3, 0, 0],[5, 0, 0, 0, 0, 0, 0, 0, 9],[0, 0, 4, 0, 0, 1, 0, 0, 0],[0, 0, 3, 0, 0, 0, 5, 0, 0],[0, 9, 0, 0, 7, 0, 0, 6, 0],[0, 0, 0, 2, 0, 0, 0, 0, 7]],
+                [[1, 0, 0, 0, 0, 0, 0, 0, 2],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[3, 0, 0, 0, 0, 0, 0, 0, 4]]
+            ],
+            medium: [
+                [[0, 0, 3, 0, 2, 0, 6, 0, 0],[9, 0, 0, 3, 0, 0, 0, 0, 1],[0, 0, 1, 8, 0, 0, 4, 0, 0],[0, 0, 8, 1, 0, 2, 9, 0, 0],[7, 0, 0, 0, 0, 0, 0, 0, 8],[0, 0, 6, 7, 0, 8, 2, 0, 0],[0, 0, 2, 0, 0, 9, 3, 0, 0],[8, 0, 0, 0, 0, 1, 0, 0, 4],[0, 0, 4, 0, 5, 0, 1, 0, 0]],
+                [[0, 3, 0, 0, 0, 0, 0, 7, 0],[0, 0, 0, 1, 0, 0, 0, 0, 6],[0, 0, 0, 0, 7, 6, 0, 0, 0],[0, 0, 0, 0, 8, 0, 5, 0, 0],[0, 0, 9, 0, 0, 0, 1, 0, 0],[0, 0, 3, 0, 4, 0, 0, 0, 0],[0, 0, 0, 3, 9, 0, 0, 0, 0],[4, 0, 0, 0, 0, 2, 0, 0, 0],[0, 5, 0, 0, 0, 0, 0, 8, 0]],
+                [[2, 0, 0, 0, 0, 0, 0, 0, 4],[0, 0, 0, 3, 0, 0, 7, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 9, 0, 0, 5, 0, 0, 0],[7, 0, 0, 0, 0, 0, 0, 0, 8]]
+            ],
+            hard: [
+                [[0, 0, 0, 2, 6, 0, 7, 0, 1],[6, 0, 0, 0, 7, 0, 0, 0, 0],[0, 9, 0, 0, 0, 0, 0, 6, 0],[0, 6, 0, 0, 0, 0, 2, 8, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 2, 1, 0, 0, 0, 0, 4, 0],[0, 3, 0, 0, 0, 0, 0, 2, 0],[0, 0, 0, 0, 1, 0, 0, 0, 6],[1, 0, 2, 0, 3, 0, 0, 0, 0]],
+                [[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0],[0, 0, 0, 0, 0, 0, 0, 0, 0]]
+            ]
+        };
+
+        class SudokuGame {
+            constructor() {
+                this.currentDifficulty = 'easy';
+                this.board = [];
+                this.solution = [];
+                this.givenCells = new Set();
+                this.selectedCell = null;
+                this.startTime = null;
+                this.timerInterval = null;
+                this.gameStarted = false;
+                this.stats = this.loadStats();
+                this.init();
+            }
+
+            init() {
+                this.attachEventListeners();
+                this.generateNewPuzzle();
+                this.startTimer();
+                this.trackGameStart();
+            }
+
+            attachEventListeners() {
+                document.querySelectorAll('[data-difficulty]').forEach(btn => {
+                    btn.addEventListener('click', (e) => this.changeDifficulty(e.target.dataset.difficulty));
+                });
+                document.getElementById('newGameBtn').addEventListener('click', () => this.generateNewPuzzle());
+                document.getElementById('hintBtn').addEventListener('click', () => this.giveHint());
+                document.getElementById('checkBtn').addEventListener('click', () => this.checkPuzzle());
+                document.getElementById('solveBtn').addEventListener('click', () => this.solvePuzzle());
+                document.getElementById('statsBtn').addEventListener('click', () => this.showAnalytics());
+                document.getElementById('exportBtn').addEventListener('click', () => this.exportStats());
+                document.getElementById('closeModalBtn').addEventListener('click', () => this.closeAnalytics());
+                document.getElementById('resetStatsBtn').addEventListener('click', () => this.resetStats());
+                document.getElementById('downloadStatsBtn').addEventListener('click', () => this.downloadStatsJSON());
+            }
+
+            changeDifficulty(difficulty) {
+                this.currentDifficulty = difficulty;
+                document.querySelectorAll('[data-difficulty]').forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.difficulty === difficulty);
+                });
+                document.getElementById('difficultyDisplay').textContent = difficulty.charAt(0).toUpperCase() + difficulty.slice(1);
+                this.generateNewPuzzle();
+            }
+
+            generateNewPuzzle() {
+                const seed = this.pickRandomSeed();
+                this.solution = this.solvePuzzleCompletely(this.deepCopy(seed));
+                this.board = this.deepCopy(seed);
+                this.givenCells.clear();
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (this.board[i][j] !== 0) {
+                            this.givenCells.add(`${i}-${j}`);
+                        }
+                    }
+                }
+                this.renderBoard();
+                this.clearStatusMessage();
+                this.resetTimer();
+                this.startTimer();
+            }
+
+            pickRandomSeed() {
+                const seeds = SEED_PUZZLES[this.currentDifficulty];
+                return this.deepCopy(seeds[Math.floor(Math.random() * seeds.length)]);
+            }
+
+            solvePuzzleCompletely(grid) {
+                for (let row = 0; row < 9; row++) {
+                    for (let col = 0; col < 9; col++) {
+                        if (grid[row][col] === 0) {
+                            for (let num = 1; num <= 9; num++) {
+                                if (this.isValidPlacement(grid, row, col, num)) {
+                                    grid[row][col] = num;
+                                    if (this.solvePuzzleCompletely(grid)) return grid;
+                                    grid[row][col] = 0;
+                                }
+                            }
+                            return false;
+                        }
+                    }
+                }
+                return true;
+            }
+
+            isValidPlacement(grid, row, col, num) {
+                for (let c = 0; c < 9; c++) {
+                    if (grid[row][c] === num) return false;
+                }
+                for (let r = 0; r < 9; r++) {
+                    if (grid[r][col] === num) return false;
+                }
+                const boxRow = Math.floor(row / 3) * 3;
+                const boxCol = Math.floor(col / 3) * 3;
+                for (let r = boxRow; r < boxRow + 3; r++) {
+                    for (let c = boxCol; c < boxCol + 3; c++) {
+                        if (grid[r][c] === num) return false;
+                    }
+                }
+                return true;
+            }
+
+            renderBoard() {
+                const grid = document.getElementById('sudokuGrid');
+                grid.innerHTML = '';
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        const cell = document.createElement('input');
+                        cell.type = 'text';
+                        cell.maxLength = '1';
+                        cell.inputMode = 'numeric';
+                        cell.classList.add('sudoku-cell');
+                        cell.dataset.row = i;
+                        cell.dataset.col = j;
+                        if (this.board[i][j] !== 0) {
+                            cell.value = this.board[i][j];
+                            cell.classList.add('given');
+                            cell.readOnly = true;
+                        }
+                        cell.addEventListener('input', (e) => this.handleCellInput(e, i, j));
+                        cell.addEventListener('focus', () => this.selectCell(i, j));
+                        cell.addEventListener('keydown', (e) => this.handleKeyDown(e, i, j));
+                        grid.appendChild(cell);
+                    }
+                }
+            }
+
+            selectCell(row, col) {
+                document.querySelectorAll('.sudoku-cell').forEach(c => {
+                    c.classList.remove('selected', 'highlight-row', 'highlight-col', 'highlight-box');
+                });
+                const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+                if (cell) {
+                    cell.classList.add('selected');
+                    document.querySelectorAll(`[data-row="${row}"]`).forEach(c => {
+                        c.classList.add('highlight-row');
+                    });
+                    document.querySelectorAll(`[data-col="${col}"]`).forEach(c => {
+                        c.classList.add('highlight-col');
+                    });
+                    const boxRow = Math.floor(row / 3);
+                    const boxCol = Math.floor(col / 3);
+                    for (let i = boxRow * 3; i < boxRow * 3 + 3; i++) {
+                        for (let j = boxCol * 3; j < boxCol * 3 + 3; j++) {
+                            document.querySelector(`[data-row="${i}"][data-col="${j}"]`)?.classList.add('highlight-box');
+                        }
+                    }
+                }
+                this.selectedCell = { row, col };
+            }
+
+            handleCellInput(e, row, col) {
+                const value = e.target.value;
+                if (value === '') {
+                    this.board[row][col] = 0;
+                    e.target.classList.remove('error');
+                } else if (/^[1-9]$/.test(value)) {
+                    const num = parseInt(value);
+                    this.board[row][col] = num;
+                    const tempBoard = this.deepCopy(this.board);
+                    tempBoard[row][col] = 0;
+                    if (this.isValidPlacement(tempBoard, row, col, num)) {
+                        e.target.classList.remove('error');
+                    } else {
+                        e.target.classList.add('error');
+                    }
+                } else {
+                    e.target.value = this.board[row][col] || '';
+                }
+            }
+
+            handleKeyDown(e, row, col) {
+                let newRow = row, newCol = col;
+                switch(e.key) {
+                    case 'ArrowUp':
+                        e.preventDefault();
+                        newRow = row === 0 ? 8 : row - 1;
+                        break;
+                    case 'ArrowDown':
+                        e.preventDefault();
+                        newRow = row === 8 ? 0 : row + 1;
+                        break;
+                    case 'ArrowLeft':
+                        e.preventDefault();
+                        newCol = col === 0 ? 8 : col - 1;
+                        break;
+                    case 'ArrowRight':
+                        e.preventDefault();
+                        newCol = col === 8 ? 0 : col + 1;
+                        break;
+                    case 'Backspace':
+                    case 'Delete':
+                        e.preventDefault();
+                        if (!this.givenCells.has(`${row}-${col}`)) {
+                            this.board[row][col] = 0;
+                            e.target.value = '';
+                            e.target.classList.remove('error');
+                        }
+                        return;
+                }
+                if (newRow !== row || newCol !== col) {
+                    document.querySelector(`[data-row="${newRow}"][data-col="${newCol}"]`)?.focus();
+                }
+            }
+
+            checkPuzzle() {
+                let isValid = true;
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (this.board[i][j] !== this.solution[i][j]) {
+                            document.querySelector(`[data-row="${i}"][data-col="${j}"]`)?.classList.add('error');
+                            isValid = false;
+                        }
+                    }
+                }
+                if (isValid && this.isPuzzleComplete()) {
+                    this.showStatusMessage('🎉 Puzzle solved correctly!', 'success');
+                    this.pauseTimer();
+                    this.recordCompletion();
+                } else {
+                    this.showStatusMessage('❌ Some cells are incorrect', 'error');
+                }
+            }
+
+            giveHint() {
+                const emptyCells = [];
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (this.board[i][j] === 0 && !this.givenCells.has(`${i}-${j}`)) {
+                            emptyCells.push([i, j]);
+                        }
+                    }
+                }
+                if (emptyCells.length === 0) {
+                    this.showStatusMessage('No more hints available', 'error');
+                    return;
+                }
+                const [hintRow, hintCol] = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+                this.board[hintRow][hintCol] = this.solution[hintRow][hintCol];
+                const cell = document.querySelector(`[data-row="${hintRow}"][data-col="${hintCol}"]`);
+                cell.value = this.solution[hintRow][hintCol];
+                cell.classList.add('given');
+                cell.readOnly = true;
+                this.givenCells.add(`${hintRow}-${hintCol}`);
+                this.trackHintUsed();
+                this.showStatusMessage('💡 Hint revealed!', 'success');
+            }
+
+            solvePuzzle() {
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (this.board[i][j] === 0) {
+                            this.board[i][j] = this.solution[i][j];
+                            const cell = document.querySelector(`[data-row="${i}"][data-col="${j}"]`);
+                            cell.value = this.solution[i][j];
+                        }
+                    }
+                }
+                this.showStatusMessage('✓ Puzzle solved!', 'success');
+                this.pauseTimer();
+            }
+
+            isPuzzleComplete() {
+                for (let i = 0; i < 9; i++) {
+                    for (let j = 0; j < 9; j++) {
+                        if (this.board[i][j] === 0) return false;
+                    }
+                }
+                return true;
+            }
+
+            startTimer() {
+                this.startTime = Date.now();
+                this.timerInterval = setInterval(() => this.updateTimer(), 1000);
+            }
+
+            resetTimer() {
+                this.pauseTimer();
+                document.getElementById('timer').textContent = '00:00';
+            }
+
+            pauseTimer() {
+                clearInterval(this.timerInterval);
+            }
+
+            updateTimer() {
+                const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+                const minutes = Math.floor(elapsed / 60);
+                const seconds = elapsed % 60;
+                document.getElementById('timer').textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+
+            showStatusMessage(message, type) {
+                const messageEl = document.getElementById('statusMessage');
+                messageEl.textContent = message;
+                messageEl.className = `status-message ${type}`;
+                setTimeout(() => this.clearStatusMessage(), 3000);
+            }
+
+            clearStatusMessage() {
+                const messageEl = document.getElementById('statusMessage');
+                messageEl.textContent = '';
+                messageEl.className = 'status-message';
+            }
+
+            deepCopy(array) {
+                return JSON.parse(JSON.stringify(array));
+            }
+
+            loadStats() {
+                const stored = localStorage.getItem('sudokuStats');
+                if (!stored) {
+                    return {
+                        totalGamesStarted: 0,
+                        totalGamesCompleted: 0,
+                        byDifficulty: {
+                            easy: { started: 0, completed: 0, totalTime: 0, bestTime: null, hintsUsed: 0 },
+                            medium: { started: 0, completed: 0, totalTime: 0, bestTime: null, hintsUsed: 0 },
+                            hard: { started: 0, completed: 0, totalTime: 0, bestTime: null, hintsUsed: 0 }
+                        },
+                        totalHintsUsed: 0,
+                        lastPlayedDate: new Date().toISOString().split('T')[0]
+                    };
+                }
+                return JSON.parse(stored);
+            }
+
+            saveStats() {
+                localStorage.setItem('sudokuStats', JSON.stringify(this.stats));
+            }
+
+            trackGameStart() {
+                this.stats.totalGamesStarted++;
+                this.stats.byDifficulty[this.currentDifficulty].started++;
+                this.stats.lastPlayedDate = new Date().toISOString().split('T')[0];
+                this.saveStats();
+            }
+
+            trackHintUsed() {
+                this.stats.totalHintsUsed++;
+                this.stats.byDifficulty[this.currentDifficulty].hintsUsed++;
+                this.saveStats();
+            }
+
+            recordCompletion() {
+                const elapsedSeconds = Math.floor((Date.now() - this.startTime) / 1000);
+                const difficulty = this.currentDifficulty;
+                this.stats.totalGamesCompleted++;
+                this.stats.byDifficulty[difficulty].completed++;
+                this.stats.byDifficulty[difficulty].totalTime += elapsedSeconds;
+                if (!this.stats.byDifficulty[difficulty].bestTime || elapsedSeconds < this.stats.byDifficulty[difficulty].bestTime) {
+                    this.stats.byDifficulty[difficulty].bestTime = elapsedSeconds;
+                }
+                this.saveStats();
+            }
+
+            showAnalytics() {
+                const modal = document.getElementById('analyticsModal');
+                modal.classList.add('show');
+                document.getElementById('statTotalGames').textContent = this.stats.totalGamesStarted;
+                document.getElementById('statCompleted').textContent = this.stats.totalGamesCompleted;
+                const rate = this.stats.totalGamesStarted > 0 ? Math.round((this.stats.totalGamesCompleted / this.stats.totalGamesStarted) * 100) : 0;
+                document.getElementById('statRate').textContent = rate + '%';
+                document.getElementById('statHints').textContent = this.stats.totalHintsUsed;
+                ['easy', 'medium', 'hard'].forEach(diff => {
+                    const stats = this.stats.byDifficulty[diff];
+                    const bestTime = stats.bestTime ? this.formatTime(stats.bestTime) : '--';
+                    const avgTime = stats.completed > 0 ? this.formatTime(Math.round(stats.totalTime / stats.completed)) : '--';
+                    document.getElementById(`statBest${diff.charAt(0).toUpperCase() + diff.slice(1)}`).textContent = bestTime;
+                    document.getElementById(`statAvg${diff.charAt(0).toUpperCase() + diff.slice(1)}`).textContent = avgTime;
+                });
+            }
+
+            closeAnalytics() {
+                document.getElementById('analyticsModal').classList.remove('show');
+            }
+
+            formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins}:${String(secs).padStart(2, '0')}`;
+            }
+
+            resetStats() {
+                if (confirm('Are you sure? This will delete all statistics.')) {
+                    this.stats = {
+                        totalGamesStarted: 0,
+                        totalGamesCompleted: 0,
+                        byDifficulty: {
+                            easy: { started: 0, completed: 0, totalTime: 0, bestTime: null, hintsUsed: 0 },
+                            medium: { started: 0, completed: 0, totalTime: 0, bestTime: null, hintsUsed: 0 },
+                            hard: { started: 0, completed: 0, totalTime: 0, bestTime: null, hintsUsed: 0 }
+                        },
+                        totalHintsUsed: 0,
+                        lastPlayedDate: new Date().toISOString().split('T')[0]
+                    };
+                    this.saveStats();
+                    this.showAnalytics();
+                    this.showStatusMessage('✓ Statistics reset', 'success');
+                }
+            }
+
+            downloadStatsJSON() {
+                const dataStr = JSON.stringify(this.stats, null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `sudoku-stats-${new Date().toISOString().split('T')[0]}.json`;
+                link.click();
+                URL.revokeObjectURL(url);
+                this.showStatusMessage('✓ Stats downloaded', 'success');
+            }
+
+            exportStats() {
+                this.downloadStatsJSON();
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new SudokuGame();
+        });
+    </script>
+</body>
+</html>
